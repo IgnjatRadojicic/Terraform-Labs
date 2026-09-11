@@ -1,0 +1,40 @@
+# Terraform
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# The lock file is ignored here because every lab directory is an ephemeral
+# practice environment and pinning providers across dozens of them adds noise.
+# In a real project you should commit .terraform.lock.hcl, so that every
+# collaborator and every CI run resolves the exact same provider versions.
+# That distinction is itself exam material.
+
+# tflocal writes this when it injects LocalStack endpoint overrides
+localstack_providers_override.tf
+
+# LocalStack container working directory
+.localstack/
+
+# Learner scratch space
+work/
+
+# Environment and secrets
+.env
+
+# tfvars files routinely hold credentials, so they are ignored by default.
+*.tfvars
+*.tfvars.json
+
+# Reference solutions and lab starter files are the exception. They hold only
+# fictional values and are the point of the repository, so they must be
+# committed. Anything you write under work/ stays ignored.
+!solutions/**/*.tfvars
+!problems/**/*.tfvars
+
+# Editor
+.vscode/
+.idea/

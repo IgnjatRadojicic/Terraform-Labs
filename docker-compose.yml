@@ -1,0 +1,39 @@
+# LocalStack: a local emulator of the AWS API.
+# Terraform talks to this exactly as it would talk to real AWS, so the full
+# init/plan/apply/destroy lifecycle works and real state files are produced.
+# Nothing here costs money and no AWS account is involved.
+
+services:
+  localstack:
+    # Pinned to major version 4 rather than :latest, so a surprise upstream
+    # release cannot change lab behaviour underneath you.
+    image: localstack/localstack:4
+    container_name: terraform-labs-localstack
+
+    ports:
+      # Every emulated AWS service is served on this one port. S3, IAM,
+      # DynamoDB and SQS all share it, which is why provider configuration
+      # points every endpoint at the same address.
+      - "4566:4566"
+
+    environment:
+      - AWS_DEFAULT_REGION=us-east-1
+      # Set DEBUG=1 when a request is failing and you want LocalStack to show
+      # you the API calls Terraform is actually making. Noisy otherwise.
+      - DEBUG=0
+
+    volumes:
+      # LocalStack's working directory. Kept on the host so you can inspect it.
+      - "./.localstack:/var/lib/localstack"
+      # Only needed if a lab uses Lambda, which spawns a sibling container.
+      # Harmless to leave in place, and avoids a confusing failure later.
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
+    healthcheck:
+      # docker compose can then tell you the container is not merely running
+      # but actually ready to serve API calls.
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
