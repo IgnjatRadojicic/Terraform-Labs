@@ -1,0 +1,118 @@
+LAB 01: Provider configuration and first resource
+Track: AWS (LocalStack)
+Tier: 1
+Estimated time: 20 minutes
+Exam objectives: 3a, 3b, 3d, 4c, 6b, 6c, 6d, 6e, 6f
+
+SCENARIO
+  Your team has decided to manage its build artifact storage with
+  Terraform instead of clicking through a console. Before anyone
+  writes real infrastructure, you need to prove the toolchain works
+  end to end against the local emulator, so that mistakes during
+  learning cost nothing.
+
+  This lab is that proof. It is deliberately small. The point is not
+  the bucket, it is understanding what every line of provider
+  configuration is doing and why Terraform needs it.
+
+YOUR TASK
+  1. Copy the starter files into a working directory outside this
+     repository. Do not edit the originals.
+
+  2. Complete the provider block in main.tf so that Terraform sends
+     its API calls to LocalStack instead of real AWS. The block has
+     TODO comments marking what is missing.
+
+  3. Add an aws_s3_bucket resource named "artifacts" with the bucket
+     name "team-build-artifacts".
+
+  4. Run the full core workflow in order: init, validate, plan, apply.
+     Read the plan output before approving it rather than typing yes
+     immediately.
+
+  5. Confirm the bucket exists from outside Terraform, using the AWS
+     CLI pointed at LocalStack.
+
+  6. Investigate logging. Run this, with no other changes:
+
+         TF_LOG_PATH=terraform.log terraform plan
+
+     Now check terraform.log. Do not just check that it exists. Check
+     its size, with ls -l, or dir on Windows.
+
+     Then work out what is actually required to get log content, and
+     make it happen. Write down what you found before reading hint 3.
+
+     On Windows PowerShell, set an environment variable for a single
+     command like this:
+
+         $env:TF_LOG_PATH="terraform.log"; terraform plan
+
+     and clear it afterwards with:
+
+         Remove-Item Env:\TF_LOG_PATH
+
+  7. Destroy everything. Confirm the bucket is gone from both
+     Terraform state and the AWS CLI.
+
+CONSTRAINTS
+  - Use explicit endpoint configuration. Do not use tflocal for this
+    lab, even if you have it installed. Seeing the endpoint block is
+    the lesson.
+
+  - Set access_key and secret_key explicitly to the literal string
+    "test". Do not rely on a credentials file or environment
+    variables, and do not use real credentials.
+
+  - Do not add a versioning, policy or encryption resource. One
+    bucket, nothing else.
+
+SUCCESS CRITERIA
+  - terraform validate reports: Success! The configuration is valid.
+
+  - terraform apply reports exactly:
+        Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+
+  - terraform state list outputs exactly one line:
+        aws_s3_bucket.artifacts
+
+  - This command lists your bucket:
+        aws --endpoint-url=http://localhost:4566 s3 ls
+
+  - You can explain in one sentence what TF_LOG_PATH on its own
+    produced, and why that result is more misleading than an outright
+    error would have been.
+
+  - terraform destroy reports:
+        Destroy complete! Resources: 1 destroyed.
+
+  - After destroying, the s3 ls command above returns nothing.
+
+HINTS
+  1. The provider documentation for LocalStack-style setups is under
+     "Custom Service Endpoints" in the AWS provider docs. For the
+     logging question, look at the debugging page in the Terraform
+     CLI documentation, and pay attention to how many environment
+     variables are described there rather than just the one you were
+     given.
+
+  2. The provider needs an endpoints block, and it needs to be told
+     to skip three validation steps that only make sense against real
+     AWS: credentials validation, the metadata API check, and the
+     account ID lookup. S3 additionally needs path style addressing,
+     because LocalStack does not resolve bucket names as subdomains
+     the way real S3 does. For logging, TF_LOG_PATH says where to
+     write. Something else says whether to write at all.
+
+  3. The endpoints block takes one entry per service you use, and
+     they all point at the same address:
+
+         endpoints {
+           s3 = "http://localhost:4566"
+         }
+
+     For logging, TF_LOG is the switch. Valid levels are TRACE,
+     DEBUG, INFO, WARN and ERROR. TF_LOG_PATH only redirects output
+     that TF_LOG has already enabled. Setting the path alone creates
+     the file and leaves it empty, which is why checking that the
+     file exists is not the same as checking that logging works.

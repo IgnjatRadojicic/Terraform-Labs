@@ -1,0 +1,142 @@
+LAB 02: Input variables with types and defaults
+Track: AWS (LocalStack)
+Tier: 1
+Estimated time: 25 minutes
+Exam objectives: 8a, 8b, 8f, 6b, 6c, 6d, 6e, 6f
+
+SCENARIO
+  The bucket from Lab 01 worked, but every value in it was hardcoded.
+  Your team now wants the same configuration deployed for three
+  different projects, each with its own name, its own log retention
+  policy, and its own list of permitted browser origins.
+
+  Copying the directory three times and editing strings is how
+  infrastructure repositories rot. Variables are the alternative, and
+  they are the foundation of everything in Tier 2 and beyond.
+
+YOUR TASK
+  1. Copy the starter files into a working directory outside this
+     repository.
+
+     main.tf and providers.tf are complete. They already reference
+     four variables that do not exist yet, so the configuration will
+     not validate until you declare them.
+
+  2. Declare all four variables in variables.tf. The TODO comments
+     specify what each one is for. You must choose the correct type
+     for each, and decide which ones get a default.
+
+  3. Create a terraform.tfvars file supplying these values:
+
+         project_name    = "acme-portal"
+         retention_days  = 90
+         force_destroy   = true
+         allowed_origins = ["https://app.acme.example",
+                            "https://admin.acme.example"]
+
+  4. Run init, validate, plan, apply. Before approving, confirm in
+     the plan output that the bucket name, the log group retention
+     and the CORS origins all reflect your tfvars values rather than
+     the defaults you declared.
+
+  5. Explore precedence. Without editing terraform.tfvars, run each
+     of these and note which value actually wins:
+
+         terraform plan -var="project_name=from-cli"
+
+         TF_VAR_project_name=from-env terraform plan
+
+     On Windows PowerShell the second one is:
+
+         $env:TF_VAR_project_name="from-env"; terraform plan
+         Remove-Item Env:\TF_VAR_project_name
+
+     Write down the ordering you observed before reading hint 3.
+
+  6. Add this line to terraform.tfvars and run plan again:
+
+         nonexistent_variable = "oops"
+
+     Note carefully whether Terraform treats this as an error or
+     something softer, and think about what that means for a typo in
+     a real variable name. Remove the line afterwards.
+
+  7. Change retention_days in terraform.tfvars from 90 to the quoted
+     string "90" and run plan. Predict the result before running it.
+     Then restore it.
+
+  8. Destroy everything.
+
+CONSTRAINTS
+  - project_name must NOT have a default. It is required, and
+    Terraform should prompt or fail if it is missing.
+
+  - The other three variables must each have a sensible default, so
+    the configuration can run with no tfvars file at all.
+
+  - Every variable needs an explicit type and a description. Leaving
+    the type off makes Terraform infer "any", which defeats the
+    purpose of the exercise.
+
+  - Do not use validation blocks. Those are a later lab.
+
+  - Do not hardcode any of these values in main.tf. If you find
+    yourself editing main.tf at all, you have taken a wrong turn.
+
+SUCCESS CRITERIA
+  - terraform validate reports: Success! The configuration is valid.
+
+  - With terraform.tfvars in place, plan shows:
+        bucket            = "acme-portal-uploads"
+        retention_in_days = 90
+        force_destroy     = true
+        and two entries under allowed_origins
+
+  - terraform apply reports:
+        Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+
+  - Deleting terraform.tfvars and running plan prompts you for
+    project_name and nothing else. This proves the other three
+    defaults are working.
+
+  - You can state the precedence order you observed in step 5.
+
+  - You can say whether step 6 produced an error or a warning, and
+    explain why that distinction is dangerous.
+
+  - terraform destroy reports:
+        Destroy complete! Resources: 3 destroyed.
+
+HINTS
+  1. The relevant documentation page is "Input Variables" in the
+     Terraform language docs. For step 5, the same page has a
+     section on variable definition precedence. Read the order it
+     gives, then check whether your experiment agrees with it, since
+     reading it and believing it are different things.
+
+  2. A variable block takes type, description and default as
+     arguments. A variable with no default becomes required. The four
+     types you need here are string, number, bool and list(string).
+     For precedence, the thing most people get wrong is where
+     environment variables sit in the order. They are not where you
+     would expect.
+
+  3. Shape of a declaration:
+
+         variable "example" {
+           description = "What this controls and why it matters."
+           type        = list(string)
+           default     = ["a", "b"]
+         }
+
+     Precedence, from lowest priority to highest:
+
+         1. Environment variables (TF_VAR_name)
+         2. terraform.tfvars
+         3. *.auto.tfvars, in lexical filename order
+         4. -var and -var-file on the command line
+
+     Environment variables being lowest surprises people, because in
+     most other tools an explicitly exported variable overrides a
+     config file. Here a committed terraform.tfvars silently beats
+     the TF_VAR_ you just exported in your shell.
