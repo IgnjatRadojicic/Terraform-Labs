@@ -1,0 +1,142 @@
+LAB 05: Local values to avoid repetition
+Track: AWS (LocalStack)
+Tier: 1
+Estimated time: 25 minutes
+Exam objectives: 8c, 8e, 6c, 6d
+
+SCENARIO
+  You have inherited a configuration that works. Three resources, each
+  carrying the same four tags, each with a name built from the same two
+  words. Nothing is broken.
+
+  Then the platform team announces every resource must now carry a
+  CostCentre tag. That is a four line change repeated three times, and
+  you have to get all three identical. Next quarter the naming convention
+  flips and you do it again.
+
+  Repetition in infrastructure code is not a style problem. It is a
+  correctness problem, because the copies drift and drift silently.
+
+YOUR TASK
+  1. Copy the starter files. Read main.tf and count the duplication
+     before changing anything.
+
+  2. Create variables.tf declaring four variables:
+
+         project_name   string, default "analytics"
+         environment    string, default "dev"
+         owner          string, default "data-platform"
+         extra_tags     map(string), default {}
+
+  3. Create locals.tf declaring three local values:
+
+         name_prefix   the project name and environment joined with a
+                       hyphen, built from the variables
+
+         common_tags   the four tags every resource shares, built from
+                       the variables rather than hardcoded
+
+         tags          common_tags with extra_tags layered on top, so a
+                       caller can add or override a tag without editing
+                       this file
+
+  4. Refactor main.tf so every resource uses those locals. No literal
+     "analytics", "dev", "data-platform" or "Terraform" should remain
+     anywhere in main.tf.
+
+  5. Prove the refactor changed nothing. Do this BEFORE adding any
+     outputs, so the check is not muddied.
+
+     Apply the ORIGINAL configuration first, then refactor, then plan
+     again. A correct refactor produces exactly:
+
+         No changes. Your infrastructure matches the configuration.
+
+     That line is the whole point of the lab. Getting it is the proof
+     that a refactor of the code was not a change to the infrastructure.
+
+  6. Now create outputs.tf exposing name_prefix and the final tags map,
+     and plan again.
+
+     This time you will NOT get "No changes", even though you still have
+     not touched a single resource. Read what Terraform says instead, and
+     work out what it implies about where outputs are stored.
+
+  7. Demonstrate the payoff. Add a CostCentre tag to every resource by
+     editing exactly one place. Plan should show 3 resources changing.
+
+  8. Try to override a common tag from the outside:
+
+         terraform plan -var='extra_tags={Owner="platform-team"}'
+
+     Confirm the override wins, and work out why.
+
+  9. Destroy.
+
+CONSTRAINTS
+  - The refactored configuration must produce identical infrastructure.
+    If step 6 shows any resource being changed or replaced, the refactor
+    is wrong.
+
+  - No string literal that appears more than once may remain in main.tf.
+
+  - tags must be built with a function, not by writing out the merged
+    map by hand.
+
+  - Do not turn name_prefix into a variable. It is derived from other
+    variables, and that distinction is the point of locals existing.
+
+SUCCESS CRITERIA
+  - apply of the original reports 3 added.
+
+  - After refactoring but BEFORE adding outputs, plan reports exactly:
+        No changes. Your infrastructure matches the configuration.
+
+  - After adding outputs, plan reports "Changes to Outputs" and tells you
+    it can apply this "without changing any real infrastructure". You can
+    explain what that means about where output values live.
+
+  - Adding CostCentre in one place produces a plan showing 3 to change.
+
+  - The extra_tags override in step 8 replaces the Owner tag rather than
+    being ignored or erroring.
+
+  - terraform output shows name_prefix as analytics-dev.
+
+  - You can explain in one sentence when to use a local and when to use
+    a variable.
+
+HINTS
+  1. The documentation page is "Local Values" in the Terraform language
+     docs. For combining the two tag maps, look through the collection
+     functions list for one that takes multiple maps and returns a single
+     map.
+
+  2. Locals are declared in a locals block, plural, and referenced with
+     local.name, singular. That inconsistency trips up everyone once.
+     A local can reference a variable and can reference another local.
+     A variable can reference neither, which is precisely why both exist.
+
+     For the tags, merge() combines maps and later arguments win on a key
+     collision. The order of its arguments decides who wins.
+
+  3. Shape:
+
+         locals {
+           name_prefix = "${var.project_name}-${var.environment}"
+
+           common_tags = {
+             Project   = var.project_name
+             ManagedBy = "Terraform"
+           }
+
+           tags = merge(local.common_tags, var.extra_tags)
+         }
+
+     On when to use which: a variable is an input someone outside your
+     configuration sets. A local is a value you compute inside it. If a
+     caller should be able to change it, it is a variable. If it is
+     derived from things a caller already set, it is a local. Making
+     name_prefix a variable would let someone set a prefix that
+     contradicts project_name and environment, which is a bug you can
+     design out of existence.
