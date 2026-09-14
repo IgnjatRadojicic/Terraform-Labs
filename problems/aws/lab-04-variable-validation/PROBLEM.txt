@@ -1,0 +1,129 @@
+LAB 04: Variable validation blocks
+Track: AWS (LocalStack)
+Tier: 1
+Estimated time: 25 minutes
+Exam objectives: 8b, 8f, 6c, 6d
+
+SCENARIO
+  Lab 02 gave your variables types. Types stop someone passing "ninety"
+  where a number belongs. They do not stop someone passing 45 where
+  CloudWatch only accepts 30, 60 or 90.
+
+  That configuration type checks, plans cleanly, and then fails at apply
+  with an error from the AWS API, after other resources in the same
+  configuration have already been created. Now you have half-built
+  infrastructure and a stack trace from a service you were not thinking
+  about.
+
+  Validation rules move that failure from apply time to plan time, before
+  anything exists. This is the cheapest possible place to catch a
+  mistake, and it is the difference between a configuration that is
+  merely correct and one that is safe for somebody else to use.
+
+YOUR TASK
+  1. Copy the starter files. main.tf is complete. All work is in
+     variables.tf.
+
+  2. Add the four validation rules described by the TODO comments.
+
+  3. Confirm the happy path still works. With the supplied
+     terraform.tfvars, plan should succeed.
+
+  4. Break each rule deliberately and read the error each time:
+
+         terraform plan -var="bucket_name=ab"
+         terraform plan -var="bucket_name=Has-Capitals"
+         terraform plan -var="environment=production"
+         terraform plan -var="retention_days=45"
+
+     Each must fail with YOUR message, not a generic type error, and
+     each must fail before any API call is made.
+
+  5. Break two rules at once:
+
+         terraform plan -var="bucket_name=AB"
+
+     Count how many errors Terraform reports. This is the argument for
+     several small validation blocks over one compound condition, and it
+     is worth seeing rather than being told.
+
+  6. Find out who is really doing the work. Comment out your
+     retention_days validation entirely, then run:
+
+         terraform plan -var="retention_days=45"
+
+     It still fails. Something other than your rule rejected it.
+
+     Read that error and compare it, word for word, against the one your
+     own validation produced in step 4. Note which file and line each one
+     points at, and which one a colleague could act on without opening
+     your configuration.
+
+     Then restore your validation. The comparison is the lesson, and it
+     is the reason the solution argues your rule is still worth writing.
+
+  7. Apply with the good values, confirm, destroy.
+
+CONSTRAINTS
+  - Do not edit main.tf.
+
+  - bucket_name must have TWO separate validation blocks, not one
+    compound condition joined with &&.
+
+  - Error messages must be useful to somebody who has never seen your
+    configuration. "Invalid bucket name" is not useful. State the rule,
+    and where practical include the value that broke it.
+
+  - Do not use a validation block to check a type. That is what type is
+    for, and duplicating it there is noise.
+
+SUCCESS CRITERIA
+  - With the supplied tfvars, apply reports:
+        Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
+
+  - Each of the four bad values in step 4 is rejected at PLAN time with
+    your error message.
+
+  - bucket_name=ab produces a message naming the actual length, 2.
+
+  - bucket_name=AB produces TWO errors, not one.
+
+  - In step 6, plan still fails with the validation removed. You can say
+    who rejected the value, which file each error points at, and why
+    writing your own rule is still worthwhile given the provider already
+    catches this one.
+
+  - You can explain why the regex function alone is not enough.
+
+HINTS
+  1. The documentation is under "Custom Validation Rules" on the Input
+     Variables page. For the functions, look at contains() in the
+     collection functions list, and at the pair of functions under "Type
+     Conversion" whose purpose is handling expressions that might error.
+
+  2. contains(list, value) returns true when the list holds that value,
+     and it handles both the environment rule and the retention rule.
+
+     For the bucket name pattern you want regex(), but regex() raises an
+     error when there is no match rather than returning false, so a bad
+     name crashes the plan instead of failing your validation cleanly.
+     can() wraps an expression and returns true or false depending on
+     whether it errored, which converts that crash into the clean false
+     a condition needs.
+
+  3. Shape of the two interesting rules:
+
+         validation {
+           condition     = contains(["dev", "staging", "prod"], var.environment)
+           error_message = "Environment must be one of: dev, staging, prod."
+         }
+
+         validation {
+           condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.bucket_name))
+           error_message = "..."
+         }
+
+     The anchors ^ and $ matter. Without them the pattern matches
+     anywhere inside the string, so "BAD-name-BAD" would pass because
+     "name" matches somewhere in the middle. That is the most common way
+     to write a validation rule that looks right and enforces nothing.
