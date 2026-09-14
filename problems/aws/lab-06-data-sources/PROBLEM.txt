@@ -1,0 +1,106 @@
+LAB 06: Data sources versus resources
+Track: AWS (LocalStack)
+Tier: 1
+Estimated time: 20 minutes
+Exam objectives: 8d, 8e, 7a, 6d
+
+SCENARIO
+  Every configuration you have written so far creates everything it uses.
+  Real configurations almost never do. They sit inside an account that
+  already has a VPC someone else owns, an AMI published by a vendor, a
+  KMS key managed by the security team.
+
+  A data source is how Terraform reads something it does not own. The
+  distinction between "I manage this" and "I merely read this" is the
+  single most important idea in this lab, because getting it wrong means
+  either destroying something you did not own or duplicating something
+  that already existed.
+
+YOUR TASK
+  1. Copy the starter files. All work is in main.tf.
+
+  2. Build the four things described by the TODO comments: one bucket, a
+     data source reading that same bucket, two data sources describing
+     the caller, and a log group named from the data source.
+
+  3. Create outputs.tf exposing four values:
+
+         resource_bucket_arn      the ARN from the RESOURCE
+         data_source_bucket_arn   the ARN from the DATA SOURCE
+         region                   from the region data source
+         account_id               from the caller identity data source
+
+  4. Apply. Compare the two ARN outputs. Then look at what account_id
+     came back as, and think about what that tells you about LocalStack.
+
+  5. Run terraform state list and count the entries. Data sources appear
+     there, prefixed differently from resources. Note the prefix.
+
+  6. Run plan again with no changes. Watch the output for the difference
+     between how Terraform treats the resource and how it treats the data
+     sources. One is refreshed, the others are read.
+
+  7. Destroy. Read the output carefully and count how many things were
+     destroyed, then compare that to how many entries were in state.
+     The difference is the entire lesson of this lab.
+
+CONSTRAINTS
+  - The data source must reference the resource, not repeat the bucket
+    name as a string literal. This is not a style preference, and step 2
+    asks you why.
+
+  - The log group name must come from the data source, not the resource.
+
+  - Do not add depends_on anywhere. Every ordering here should fall out
+    of references.
+
+SUCCESS CRITERIA
+  - terraform apply reports:
+        Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
+
+    Note that it says 2, not 5, even though you declared five blocks.
+    Explaining that number is the success criterion.
+
+  - resource_bucket_arn and data_source_bucket_arn are identical.
+
+  - region is us-east-1 and account_id is a twelve digit string.
+
+  - terraform state list shows 5 entries, 3 of which start with "data.".
+
+  - terraform destroy reports 2 destroyed, not 5.
+
+HINTS
+  1. The documentation page is "Data Sources" in the Terraform language
+     docs. Read the opening paragraph about what a data source is for,
+     then look at how its address differs from a resource address when
+     referenced.
+
+  2. A data block looks almost exactly like a resource block but starts
+     with the word data. The difference appears when you REFERENCE it:
+     a resource is aws_s3_bucket.managed, while a data source is
+     data.aws_s3_bucket.lookup. That data. prefix is required and is the
+     most common thing to forget.
+
+     On the first-apply question: if you hardcoded the bucket name, the
+     data source would have nothing to depend on, so Terraform would be
+     free to read it before the bucket was created, and the read would
+     fail.
+
+  3. Shapes:
+
+         data "aws_s3_bucket" "lookup" {
+           bucket = aws_s3_bucket.managed.bucket
+         }
+
+         data "aws_region" "current" {}
+
+     Referencing one:
+
+         value = data.aws_s3_bucket.lookup.arn
+
+     On the destroy count: data sources are not created, so there is
+     nothing to destroy. They are read on every plan and apply, and they
+     vanish from state when you stop declaring them. Terraform never
+     deletes the real thing a data source points at, which is exactly the
+     property that makes data sources safe to point at infrastructure
+     another team owns.
