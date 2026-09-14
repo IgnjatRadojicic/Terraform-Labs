@@ -60,3 +60,7 @@ terraform-labs/
 That directory contains complete answers. Reading a solution before making a genuine attempt converts a lab from practice into passive reading, and passive reading is what you are presumably trying to supplement.
 
 Each problem statement includes three progressive hints. Use those first. `WORKFLOW.md` suggests when to reach for each one.
+
+## Want good written theory material?
+
+*Wink wink* I got a repo for you https://github.com/IgnjatRadojicic/HashiCorp-Terraform-A04 :>
