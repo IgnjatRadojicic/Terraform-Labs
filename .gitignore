@@ -35,6 +35,17 @@ work/
 !solutions/**/*.tfvars
 !problems/**/*.tfvars
 
+# Local helper scripts. Personal tooling rather than repository content.
+promote-lab.ps1
+
+# Labs that have not been completed yet.
+#
+# Generated labs live here until they are done. Completing one moves its
+# problem and solution back into problems/ and solutions/, so the commit
+# history reflects work actually finished rather than one bulk import.
+# Use promote-lab.ps1 to move a lab out of here.
+notdone/
+
 # Editor
 .vscode/
 .idea/

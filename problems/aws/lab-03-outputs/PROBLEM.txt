@@ -1,0 +1,91 @@
+LAB 03: Outputs and referencing resource attributes
+Track: AWS (LocalStack)
+Tier: 1
+Estimated time: 20 minutes
+Exam objectives: 8c, 8e, 6d, 6e
+
+SCENARIO
+  The reporting stack you are building will be consumed by another team.
+  They need the bucket ARN to write an IAM policy against it, and the log
+  group ARN to point their alerting at.
+
+  Right now that information exists only inside your state file. Outputs
+  are how a configuration publishes values outward, whether outward means
+  a human, a shell script, or another Terraform configuration consuming
+  this one as a module.
+
+YOUR TASK
+  1. Copy the starter files into your working directory. Everything
+     except outputs.tf is complete. All your work happens in outputs.tf.
+
+  2. Declare the four outputs described by the TODO comments.
+
+  3. Run plan and read it carefully BEFORE applying. Some of your outputs
+     will show a real value and others will show something else. Work out
+     why before continuing.
+
+  4. Apply. The outputs print at the end.
+
+  5. Retrieve values afterwards without re-running apply:
+
+         terraform output
+         terraform output bucket_arn
+         terraform output -raw bucket_arn
+         terraform output -json
+
+     Compare the second and third. The difference matters the moment you
+     use one inside a shell script.
+
+  6. Destroy, then run terraform output again and note what happens.
+
+CONSTRAINTS
+  - Do not edit main.tf. If you are changing resources, you have gone
+    sideways.
+
+  - connection_summary must be built from the resource attributes, not
+    from the project_name variable. Using the variable produces the same
+    text while teaching you nothing.
+
+  - Give every output a description. It is not decoration. It appears in
+    terraform output -json and in generated module documentation.
+
+SUCCESS CRITERIA
+  - terraform apply reports:
+        Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
+    followed by an Outputs: section listing all four.
+
+  - bucket_arn is: arn:aws:s3:::reporting-data
+
+  - terraform output -raw bucket_arn prints the ARN with no surrounding
+    quotes, suitable for piping into another command.
+
+  - You can explain why some outputs showed (known after apply) during
+    plan while others showed their real value.
+
+  - terraform destroy reports 2 destroyed.
+
+HINTS
+  1. The documentation page is "Output Values" in the Terraform language
+     docs. To find which attributes a resource exposes, read the
+     Attribute Reference section at the BOTTOM of that resource's page in
+     the AWS provider docs, not the Argument Reference at the top. Those
+     are two different lists and the distinction is the lesson here.
+
+  2. Arguments are what you set. Attributes are what you can read back,
+     and they include everything you set plus everything AWS computed
+     during creation. An attribute AWS computes cannot be known before
+     the resource exists, which is exactly what plan means when it prints
+     (known after apply).
+
+  3. Referencing an attribute:
+
+         value = aws_s3_bucket.data.arn
+
+     Building a composed string:
+
+         value = "bucket ${aws_s3_bucket.data.bucket} logging to ${aws_cloudwatch_log_group.audit.name}"
+
+     On the CLI difference: plain terraform output quotes strings because
+     it is displaying a value to a human. The -raw flag prints the bare
+     string with no quotes and no trailing newline, which is what command
+     substitution in a script needs.
