@@ -1,0 +1,122 @@
+LAB 07: Resource dependencies, implicit and explicit
+Track: AWS (LocalStack)
+Tier: 1
+Estimated time: 25 minutes
+Exam objectives: 8d, 6a, 6d, 6e
+
+SCENARIO
+  Terraform builds a dependency graph and creates resources in the order
+  that graph implies, in parallel wherever it can. Most of the time you
+  never think about it, because referencing another resource is enough.
+
+  The case worth understanding is the one where ordering matters but no
+  data flows. Terraform cannot infer those, they fail intermittently
+  rather than reliably, and the resulting infrastructure is wrong in ways
+  that do not announce themselves.
+
+  This is also the topic where the exam most reliably offers you the
+  wrong answer and makes it look attractive.
+
+YOUR TASK
+  1. Copy the starter files. All work is in main.tf.
+
+  2. Build the three resources described by the TODO comments.
+
+  3. Create outputs.tf exposing:
+
+         bucket                the bucket id
+         versioning_status     whether versioning ended up enabled
+         manifest_version_id   the object's version_id
+
+     That last one is your proof. An object written to an unversioned
+     bucket has no meaningful version id. One written after versioning
+     was enabled does.
+
+  4. Apply. Read the ordering in the apply output, then check
+     manifest_version_id.
+
+  5. Inspect the graph and find the two edges you created:
+
+         terraform graph
+
+     One edge exists because of a reference. One exists because you asked
+     for it. From the graph output alone they are indistinguishable,
+     which is worth knowing.
+
+  6. Now break it deliberately. Remove the explicit dependency, destroy,
+     and apply again from scratch. Check manifest_version_id.
+
+     Notice what you did NOT get: an error. The apply succeeds, reports
+     3 added, and every resource exists. The only symptom is an output
+     that is empty instead of a version id.
+
+     That is what makes this class of bug expensive. Nothing failed. You
+     would have to already know to look.
+
+     Put the dependency back when you are done, destroy, and apply again
+     to confirm the version id returns.
+
+  7. Now the redundant case. Add an explicit dependency on the bucket to
+     the versioning resource, which already references it. Plan.
+
+     Nothing changes. Work out why it is still a bad idea, and check your
+     answer against the solution.
+
+  8. Destroy.
+
+CONSTRAINTS
+  - Exactly one explicit dependency in the finished configuration. If you
+    have two, one of them is redundant.
+
+  - The versioning resource must get its ordering from a reference alone.
+
+  - Build the JSON content with a function. Do not hand write JSON inside
+    a quoted string.
+
+SUCCESS CRITERIA
+  - terraform apply reports:
+        Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+
+  - versioning_status is "Enabled".
+
+  - manifest_version_id is a long opaque string, not "null" and not
+    empty. That is the proof the ordering held.
+
+  - terraform graph contains an edge from the object to the versioning
+    resource.
+
+  - You can state the one condition under which depends_on is the correct
+    tool, in a single sentence.
+
+HINTS
+  1. The documentation page is "Resource Dependencies" in the Terraform
+     language docs, and the meta-argument itself is documented under
+     "The depends_on Meta-Argument". Read what it says about when to use
+     it, which is more restrictive than most people assume.
+
+     For the JSON, look through the encoding functions.
+
+  2. An implicit dependency is created simply by referencing another
+     resource's attribute. You do not ask for it and cannot turn it off.
+     An explicit dependency is the depends_on meta-argument, which takes
+     a LIST of resource addresses, not a single value, and takes the
+     address itself with no attribute on the end.
+
+     For the JSON content, jsonencode() takes an HCL value and returns a
+     JSON string. Note the direction carefully. Its counterpart goes the
+     other way and is a favourite exam trap.
+
+  3. Shape:
+
+         depends_on = [aws_s3_bucket_versioning.documents]
+
+     Note the square brackets, and that there is no .id or .arn on the
+     end. You depend on the resource, not on one of its values. Putting
+     an attribute there is a syntax error, and it is the error people
+     make when they have not internalised that depends_on exists
+     precisely for the case where no attribute is involved.
+
+     The single sentence for the success criteria: use depends_on only
+     when a real ordering requirement exists and no data flows between
+     the two resources, because any dependency you can express as a
+     reference should be.
