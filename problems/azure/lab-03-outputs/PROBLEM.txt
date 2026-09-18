@@ -1,0 +1,81 @@
+LAB 03: Outputs and referencing resource attributes
+Track: Azure (PLAN ONLY)
+Tier: 1
+Estimated time: 25 minutes
+Exam objectives: 8d, 6b, 6c
+Pairs with: AWS lab 03
+
+SCENARIO
+  Same core lesson as the AWS lab: arguments are what you set, attributes
+  are what the cloud computes. Azure adds two wrinkles worth meeting
+  now, because both matter a great deal later.
+
+YOUR TASK
+  1. Build a resource group, a storage account and a Log Analytics
+     workspace.
+
+  2. Create five outputs:
+
+         storage_account_name    an argument you set
+         storage_account_id      the computed ARM resource ID
+         primary_blob_endpoint   a computed URL
+         workspace_id            the workspace GUID
+         primary_access_key      the account key
+
+  3. Plan, and study the output section closely.
+
+  4. Look hard at storage_account_id. Compare its SHAPE against an AWS
+     ARN from the AWS track, and write down the difference.
+
+     This matters more than it looks now. Tier 4 imports use this string.
+
+  5. Note that workspace_id and the ARM resource id are different values.
+     Work out which one you would use to reference the workspace from
+     another Terraform resource.
+
+  6. Now try outputting primary_access_key WITHOUT marking it sensitive.
+     Plan it, read the error, then mark it.
+
+     Then ask yourself who decided that value was sensitive, given that
+     you never said so anywhere.
+
+CONSTRAINTS
+  - Do not apply.
+  - Every output needs a description.
+  - At least one output must be a computed attribute rather than an
+    argument you supplied.
+
+SUCCESS CRITERIA
+  - terraform plan reports 3 to add.
+
+  - Computed values appear as (known after apply).
+
+  - Outputting the access key unmarked FAILS; marking it sensitive fixes
+    it.
+
+  - You can describe how an Azure resource ID differs in shape from an
+    AWS ARN, and why that will matter for imports.
+
+HINTS
+  1. Read the Attributes Reference section of azurerm_storage_account.
+
+  2. An Azure resource ID is a full hierarchical path:
+
+         /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.Storage/storageAccounts/<name>
+
+     An AWS ARN is flatter and shorter. The Azure form encodes the whole
+     containment chain, subscription then resource group then provider
+     namespace then type then name. That is why Tier 4 Azure imports need
+     the entire string rather than a short name, and it is the single
+     biggest practical difference between importing on the two clouds.
+
+  3. On the sensitive question: the PROVIDER marks primary_access_key
+     sensitive in its schema. You did not, and you cannot un-mark it
+     without nonsensitive(). Terraform then refuses to place it in a root
+     module output unless you acknowledge it explicitly.
+
+     This is the contagion rule from AWS lab 24, except here it triggers
+     on an ordinary storage account rather than on a variable you
+     deliberately marked. Azure resources expose keys and connection
+     strings far more routinely than S3 does, so you meet the rule much
+     earlier on this track.

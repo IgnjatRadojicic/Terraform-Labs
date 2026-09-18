@@ -1,0 +1,122 @@
+LAB 01: Provider configuration and your first Azure resource
+Track: Azure (real subscription, PLAN ONLY)
+Tier: 1
+Estimated time: 25 minutes
+Exam objectives: 3a, 3c, 6a, 6b
+Pairs with: AWS lab 01
+
+READ THIS FIRST
+  Never run terraform apply on the Azure track. Every resource here is a
+  real, billable Azure resource. Plan is enough for everything these labs
+  teach, and there is a real bill to lose.
+
+  The AWS track runs against LocalStack, so applying there costs nothing.
+  Azure has no equivalent emulator. Azurite emulates Storage only, not
+  Azure Resource Manager, which is the API almost everything speaks to.
+
+SCENARIO
+  You have done the same lab on AWS. This one builds the closest Azure
+  equivalent so you can see what the provider changes and what it does
+  not.
+
+  Three things differ immediately, and all three will follow you through
+  every remaining Azure lab.
+
+YOUR TASK
+  1. Create a working directory with versions.tf, providers.tf, main.tf
+     and outputs.tf.
+
+  2. Pin the azurerm provider to ~> 4.0 and require Terraform >= 1.10.
+
+  3. Configure the provider. The azurerm provider needs a block that has
+     no AWS counterpart and that Terraform will not let you omit. Find it
+     in the provider documentation's first example.
+
+     Leave it empty. It is still required.
+
+  4. Create an azurerm_resource_group named rg-terraform-labs in uksouth.
+
+  5. Create an azurerm_storage_account inside it. You will need to supply
+     two arguments that have no S3 equivalent, covering performance tier
+     and redundancy.
+
+     Name it carefully. Azure's rules here are much stricter than S3's,
+     and you will find them by getting it wrong.
+
+  6. Output the resource group name, the storage account name, and the
+     primary blob endpoint.
+
+  7. Run terraform init, then validate, then plan. Read the plan.
+
+  8. Now the experiment. Delete the provider block's required inner block
+     entirely, leaving `provider "azurerm" {}`.
+
+     Run terraform validate. Note the result.
+     Then run terraform plan. Note that result.
+
+     The difference between those two is the single most useful thing
+     this lab teaches.
+
+  9. Put it back. Do not apply.
+
+CONSTRAINTS
+  - Do not apply. Plan only.
+  - Hardcode the values in this lab. Variables are lab 02.
+  - Storage account name must be globally unique across all of Azure, so
+    pick something unlikely to collide.
+
+SUCCESS CRITERIA
+  - terraform plan reports:
+        Plan: 2 to add, 0 to change, 0 to destroy.
+
+  - The plan shows primary_blob_endpoint as (known after apply).
+
+  - In step 8, terraform validate SUCCEEDS with the block removed, and
+    terraform plan FAILS.
+
+  - You can state why a storage account name that would be a perfectly
+    legal S3 bucket name may still be rejected by Azure.
+
+HINTS
+  1. The documentation is the azurerm provider page on the Terraform
+     registry, plus the azurerm_resource_group and azurerm_storage_account
+     resource pages. The provider page's very first example contains the
+     block from step 3.
+
+  2. The block is `features {}`. It configures per-resource-type
+     behaviours, such as whether deleting a resource group also purges
+     soft-deleted items inside it. Empty is fine and normal.
+
+     For the storage account, the two extra arguments are account_tier
+     and account_replication_type. Standard and LRS are the cheapest.
+
+     Storage account names: 3 to 24 characters, lowercase letters and
+     digits ONLY. No hyphens, no underscores, no capitals.
+
+  3. Shape:
+
+         provider "azurerm" {
+           features {}
+         }
+
+         resource "azurerm_resource_group" "main" {
+           name     = "rg-terraform-labs"
+           location = "uksouth"
+         }
+
+         resource "azurerm_storage_account" "main" {
+           name                     = "stterraformlabs001"
+           resource_group_name      = azurerm_resource_group.main.name
+           location                 = azurerm_resource_group.main.location
+           account_tier             = "Standard"
+           account_replication_type = "LRS"
+         }
+
+     Why step 8 matters: validate checks SYNTAX and internal consistency.
+     It does not check that a provider is correctly configured, because
+     that is a runtime concern. So a missing features block passes
+     validate and fails plan.
+
+     Carry that forward. "terraform validate passed" is a much weaker
+     statement than most people treat it as, and this is the cleanest
+     demonstration of it you will get.

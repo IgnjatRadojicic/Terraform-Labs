@@ -1,0 +1,92 @@
+LAB 05: Local values to avoid repetition
+Track: Azure (PLAN ONLY)
+Tier: 1
+Estimated time: 25 minutes
+Exam objectives: 8c, 8e, 6b
+Pairs with: AWS lab 05
+
+SCENARIO
+  The AWS version of this lab used locals to stop repeating a tag map.
+  Azure gives locals a second job that AWS does not: reconciling naming
+  rules that contradict each other.
+
+  Resource groups allow hyphens. Storage accounts forbid them. Containers
+  allow them. One naming convention cannot serve all three, so something
+  has to do the conversion, once, in a place you can find.
+
+YOUR TASK
+  1. Declare project_name, environment, location, and an extra_tags map
+     defaulting to empty.
+
+  2. In a locals block, build:
+
+         name_prefix    "<project>-<environment>", used for resources
+                        that allow hyphens
+
+         storage_name   the same idea with hyphens stripped and forced
+                        lowercase, for the storage account
+
+         common_tags    a default tag set merged with extra_tags, so the
+                        caller can add tags without losing the defaults
+
+  3. Build a resource group, a storage account and a Log Analytics
+     workspace using those locals. Every resource gets common_tags.
+
+  4. Plan and confirm the names come out as you expect.
+
+  5. Pass extra tags and confirm they layer rather than replace:
+
+         terraform plan -var='extra_tags={"CostCentre":"CC-1"}'
+
+  6. Work out why the merge order matters, and what would happen if you
+     put extra_tags first instead of last.
+
+CONSTRAINTS
+  - No literal repeated more than once across the configuration.
+  - storage_name must be DERIVED, not a separate variable. If the caller
+    can set it independently it can drift from name_prefix.
+  - Do not apply.
+
+SUCCESS CRITERIA
+  - terraform plan reports 3 to add.
+
+  - With defaults, storage_name has no hyphens and name_prefix does.
+
+  - extra_tags adds to the defaults rather than replacing them.
+
+  - You can say what merge order does and why extra_tags goes last.
+
+HINTS
+  1. Read the "Local Values" documentation page, plus merge(), replace()
+     and lower() in the function reference.
+
+  2. replace(s, "-", "") strips hyphens. lower() forces case. Compose
+     them.
+
+     merge(a, b) layers maps with LATER arguments winning, so the caller's
+     tags must come last to override.
+
+  3. Shape:
+
+         locals {
+           name_prefix  = "${var.project_name}-${var.environment}"
+           storage_name = lower(replace("st${var.project_name}${var.environment}", "-", ""))
+
+           common_tags = merge(
+             {
+               ManagedBy   = "Terraform"
+               Environment = var.environment
+             },
+             var.extra_tags
+           )
+         }
+
+     On step 6: if extra_tags came first, your defaults would overwrite
+     whatever the caller passed, silently. The caller would set
+     Environment = "prod" and get "dev", with no error. Merge order is
+     not cosmetic.
+
+     On why storage_name is derived: a separate variable would let a
+     caller set project_name = "orders" and storage_name = "stpayments",
+     producing resources that disagree about what they are for. Deriving
+     it makes that impossible to express.

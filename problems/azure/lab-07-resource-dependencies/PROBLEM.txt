@@ -1,0 +1,109 @@
+LAB 07: Resource dependencies, implicit and explicit
+Track: Azure (PLAN ONLY)
+Tier: 1
+Estimated time: 30 minutes
+Exam objectives: 8d, 6c, 6d
+Pairs with: AWS lab 07
+
+This is the last Tier 1 Azure lab.
+
+SCENARIO
+  Terraform works out creation order from the references between
+  resources. You almost never state the order yourself.
+
+  Azure's chain is one link longer than AWS's. An S3 object needs a
+  bucket. An Azure blob needs a container, which needs a storage account,
+  which needs a resource group. Four levels where AWS had two.
+
+  That extra depth makes the dependency graph easier to see, which is why
+  this lab is worth doing even though you have met the concept already.
+
+YOUR TASK
+  1. Build the full chain:
+
+         azurerm_resource_group
+         azurerm_storage_account      inside the resource group
+         azurerm_storage_container    inside the storage account
+         azurerm_storage_blob         inside the container
+
+     Enable blob versioning on the storage account.
+
+  2. Every link must be IMPLICIT, created by referencing an attribute of
+     the resource above. Write no depends_on anywhere.
+
+  3. Output the container name, the blob URL, and a joined string showing
+     the chain in order.
+
+  4. Render the graph and find the chain in it:
+
+         terraform graph
+
+     On Windows, pipe it to a file and read that, since the output is
+     wide.
+
+  5. Now test your understanding. In the container, replace the
+     reference to the storage account with a hardcoded string equal to
+     the same value.
+
+     Plan it. It will still be correct. Ask yourself what you have broken
+     even though the plan looks fine.
+
+  6. Put the reference back.
+
+  7. Look at the storage account and container arguments side by side.
+     One takes an ID and one takes a name. Note which, because this
+     inconsistency is a common source of confusion.
+
+CONSTRAINTS
+  - No depends_on anywhere in this lab.
+  - No resource name may be typed as a literal where a reference exists.
+  - Do not apply.
+
+SUCCESS CRITERIA
+  - terraform plan reports 4 to add.
+
+  - terraform graph shows an unbroken chain from resource group through
+    to blob.
+
+  - In step 5 the plan still succeeds, and you can say precisely what was
+    lost.
+
+HINTS
+  1. Read azurerm_storage_container and azurerm_storage_blob. Pay
+     attention to which arguments take an ID and which take a name; they
+     are not consistent, and the provider changed some of them in version
+     4.
+
+  2. Referencing an attribute IS the dependency. There is nothing else to
+     write.
+
+  3. Shape:
+
+         resource "azurerm_storage_container" "uploads" {
+           name               = "uploads"
+           storage_account_id = azurerm_storage_account.main.id
+         }
+
+         resource "azurerm_storage_blob" "config" {
+           name                   = "app.conf"
+           storage_account_name   = azurerm_storage_account.main.name
+           storage_container_name = azurerm_storage_container.uploads.name
+           type                   = "Block"
+           source_content         = "environment=dev"
+         }
+
+     Note the inconsistency from step 7: the container takes
+     storage_account_id while the blob takes storage_account_name. Both
+     are correct for azurerm 4.x. This sort of thing is why you read the
+     resource page rather than pattern-matching from the previous
+     resource.
+
+     On step 5: a hardcoded string produces the same plan and creates NO
+     EDGE in the graph. Terraform no longer knows the container depends
+     on the account, so it is free to schedule them in any order or in
+     parallel. It may work every time you try it and fail under different
+     timing.
+
+     A correct plan is not evidence of a correct graph. That is the
+     lesson, and it is the same one the AWS lab taught with an empty
+     version_id.

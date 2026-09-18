@@ -1,0 +1,83 @@
+LAB 06: Data sources versus resources
+Track: Azure (PLAN ONLY)
+Tier: 1
+Estimated time: 25 minutes
+Exam objectives: 8d, 7a, 6c
+Pairs with: AWS lab 06
+
+SCENARIO
+  A resource is something Terraform creates and owns. A data source is
+  something that already exists, which Terraform reads and will never
+  change or destroy.
+
+  The AWS lab used aws_caller_identity to answer "who am I". Azure's
+  equivalent returns more, because Azure has an extra layer of hierarchy
+  that AWS has no counterpart for.
+
+YOUR TASK
+  1. Declare a data source for the current client configuration. It takes
+     no arguments at all.
+
+  2. Create a resource group and a storage account.
+
+  3. Tag the storage account with the subscription ID pulled from the
+     data source rather than hardcoded.
+
+  4. Output subscription_id, tenant_id, object_id, and the created
+     resource group name.
+
+  5. Plan. Note which outputs already have real values in the plan and
+     which are (known after apply). Work out why the data source values
+     are known and the resource values are not.
+
+  6. Look at tenant_id and subscription_id together. AWS has an account
+     ID and nothing above it. Azure has a tenant containing
+     subscriptions. Write down what that extra layer is for.
+
+  7. Consider ownership. If you ran terraform destroy on this
+     configuration, what would happen to the subscription? Answer before
+     checking the solution.
+
+CONSTRAINTS
+  - Do not apply, and do not destroy.
+  - The subscription ID must come from the data source, never typed as a
+    literal.
+  - The data source must take no arguments.
+
+SUCCESS CRITERIA
+  - terraform plan reports 2 to add. The data source is NOT counted,
+    because reading is not creating.
+
+  - subscription_id and tenant_id show real values during plan, while the
+    storage account's computed attributes show (known after apply).
+
+  - You can state what terraform destroy would do to the subscription.
+
+HINTS
+  1. The data source is azurerm_client_config. Read its page; the
+     argument list is empty, which is unusual and correct.
+
+  2. Data sources are read during PLAN, which is why their values are
+     already known. Resources are created during APPLY, so their computed
+     attributes cannot be known earlier.
+
+  3. Shape:
+
+         data "azurerm_client_config" "current" {}
+
+         tags = {
+           Subscription = data.azurerm_client_config.current.subscription_id
+         }
+
+     On step 6: a tenant is an Entra ID directory, the identity boundary.
+     One tenant can contain many subscriptions, which are the billing and
+     resource boundary. AWS collapses these into one account. This is why
+     Azure role assignments reference a scope path and AWS IAM policies
+     reference ARNs, and it is the reason lab 21's provider aliasing has
+     more to configure on Azure than on AWS.
+
+     On step 7: nothing. Terraform does not own the subscription, it only
+     read facts about it. Destroy removes the resource group and storage
+     account. That is the whole point of a data source, and the reason
+     reading an existing resource group with a data source is safer than
+     declaring one you did not create.

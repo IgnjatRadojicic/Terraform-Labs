@@ -1,0 +1,109 @@
+LAB 10: for_each over a map with varying configuration
+Track: Azure (PLAN ONLY)
+Tier: 2
+Estimated time: 35 minutes
+Exam objectives: 8g, 8e, 8c, 6d
+Pairs with: AWS lab 10
+
+SCENARIO
+  Lab 09 created containers that differed only by name. Real
+  infrastructure is not that uniform. One container is private, another
+  is publicly readable, and only some need auditing.
+
+  A set cannot express that, because a set element is only a name. A map
+  can: the key identifies the instance, the value carries its settings.
+
+  Azure gives this lab something the AWS version lacked. Container access
+  level is a real, consequential, per-instance setting with a genuine
+  security meaning, rather than a flag invented for the exercise.
+
+YOUR TASK
+  1. Declare project_name, location, and:
+
+         containers   map(object({
+                        access_type    = string
+                        retention_days = number
+                        audited        = bool
+                      }))
+
+     Default it to three entries:
+
+         uploads         private, 30 days,  audited
+         reports         private, 90 days,  not audited
+         public-assets   blob,    365 days, audited
+
+     Note that the third key contains a hyphen. Container names permit
+     them even though storage account names do not.
+
+  2. Create a resource group and a storage account.
+
+  3. For every entry, create a container with that entry's access type,
+     and a Log Analytics workspace with that entry's retention.
+
+  4. For ONLY the audited entries, create an additional container named
+     "<key>-audit".
+
+     Do this by filtering the map, not by creating one for every entry
+     and leaving the unwanted ones empty.
+
+  5. Create four outputs: the container names, the access types actually
+     applied, the retention per workspace, and the sorted list of keys
+     that received an audit container.
+
+  6. Plan and check the totals carefully.
+
+  7. Change one entry's retention and confirm the plan is still 10 to
+     add, since nothing exists yet. Then reason about what it WOULD do
+     against real state, using your AWS lab 10 result.
+
+CONSTRAINTS
+  - for_each only, no count.
+  - The audit containers must exist only for audited entries. If you
+    count 4 audit containers instead of 2, the filter is not filtering.
+  - Reference the storage account by attribute, never by rebuilding its
+    name as a string.
+  - Do not apply.
+
+SUCCESS CRITERIA
+  - terraform plan reports:
+        Plan: 10 to add, 0 to change, 0 to destroy.
+
+    One resource group, one storage account, three containers, three
+    workspaces, two audit containers.
+
+  - access_types shows "blob" for public-assets and "private" for the
+    other two, proving per-instance configuration.
+
+  - audited_containers is ["public-assets", "uploads"].
+
+HINTS
+  1. "The for_each Meta-Argument" for the loop, "For Expressions" for the
+     filter. You need no new construct for step 4, only a different
+     expression in the for_each you already have.
+
+  2. With a map, each.key is the key and each.value is the object, so
+     each.value.retention_days reaches a field.
+
+     A for expression with an if clause produces a filtered map, and a
+     map is a valid for_each argument.
+
+  3. Shape:
+
+         resource "azurerm_storage_container" "audit" {
+           for_each = { for k, v in var.containers : k => v if v.audited }
+
+           name               = "${each.key}-audit"
+           storage_account_id = azurerm_storage_account.main.id
+         }
+
+     Why filtering beats a flag: a container created and left unused is a
+     real object that exists, costs storage transactions, appears in
+     audits and has to be explained. Filtering means it was never
+     created. When you later flip audited from true to false, filtering
+     destroys the container while a flag would merely modify it, and only
+     one of those is what you meant.
+
+     On the access_type field specifically: "blob" makes the container's
+     contents publicly readable over the internet. That is a real
+     security decision expressed as one word in a map, which is a good
+     argument for the type constraint being an object rather than any.

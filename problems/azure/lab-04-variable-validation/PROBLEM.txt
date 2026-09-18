@@ -1,0 +1,95 @@
+LAB 04: Variable validation blocks
+Track: Azure (PLAN ONLY)
+Tier: 1
+Estimated time: 30 minutes
+Exam objectives: 8b, 8f, 6d
+Pairs with: AWS lab 04
+
+SCENARIO
+  Azure storage account naming is the best validation exercise in either
+  track, because the rules are strict, non-obvious, and the failure
+  without validation arrives late and expensively.
+
+  Without a validation block a bad name fails at APPLY, from the Azure
+  API, after the resource group has already been created. With one it
+  fails at plan, before anything exists.
+
+YOUR TASK
+  1. Declare four validated variables:
+
+         storage_account_name   3 to 24 characters, lowercase alphanumeric
+                                only. Use TWO separate validation blocks,
+                                one per rule, and notice what that buys.
+
+         location               one of uksouth, ukwest, westeurope,
+                                northeurope
+
+         replication_type       one of LRS, ZRS, GRS, RAGRS
+
+         environment            one of dev, test, prod
+
+  2. Build a resource group and a storage account from them.
+
+  3. Confirm each rule fires. For the name, test all three failure modes
+     separately:
+
+         terraform plan -var="storage_account_name=st-labs-validation"
+         terraform plan -var="storage_account_name=stabcdefghijklmnopqrstuvw"
+         terraform plan -var="storage_account_name=stLabsValidation"
+
+     The first of those is a perfectly legal S3 bucket name.
+
+  4. Note which of your two name validations caught which failure, and
+     why splitting them produced a better message than one combined rule
+     would have.
+
+  5. Confirm a valid combination still plans cleanly.
+
+CONSTRAINTS
+  - Use two separate validation blocks for the name, not one combined
+    condition.
+  - Error messages must state the rule, and where useful the offending
+    value.
+  - Do not apply.
+
+SUCCESS CRITERIA
+  - A hyphenated name is rejected with a message about lowercase letters
+    and digits.
+  - A 25-character name is rejected with a message naming the length.
+  - An uppercase name is rejected.
+  - An invalid location is rejected.
+  - A valid set plans to 2 to add.
+
+HINTS
+  1. The documentation is "Custom Condition Checks", validation section.
+     Same page as the AWS lab.
+
+  2. can(regex(...)) for the character rule, length() for the size rule,
+     contains([...], var.x) for the enumerated ones.
+
+  3. Shape:
+
+         validation {
+           condition     = length(var.storage_account_name) >= 3 && length(var.storage_account_name) <= 24
+           error_message = "Storage account names must be 3 to 24 characters. Got ${length(var.storage_account_name)}."
+         }
+
+         validation {
+           condition     = can(regex("^[a-z0-9]+$", var.storage_account_name))
+           error_message = "Storage account names allow only lowercase letters and digits."
+         }
+
+     Why two blocks rather than one: Terraform evaluates every validation
+     block on a variable and reports each failure separately. A single
+     combined condition would tell the caller "the name is wrong" without
+     saying which rule they broke. Two blocks tell them exactly which.
+
+     One rule per block, always. This is the same principle as the AWS
+     lab, but the payoff is larger here because there are more rules and
+     they are less guessable.
+
+     Worth noting what validation still cannot catch: global uniqueness.
+     A name can satisfy every rule above and still fail at apply because
+     somebody else in the world already has it. No validation block can
+     check that, because it needs a round trip to Azure. Plan-time
+     validation moves most failures earlier; it does not move all of them.

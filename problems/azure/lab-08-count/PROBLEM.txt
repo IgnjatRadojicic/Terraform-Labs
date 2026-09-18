@@ -1,0 +1,123 @@
+LAB 08: count for near-identical resources
+Track: Azure (PLAN ONLY)
+Tier: 2
+Estimated time: 30 minutes
+Exam objectives: 8g, 8e, 6d
+Pairs with: AWS lab 08
+
+From Tier 2 onward there are no starter files. Create every file
+yourself, including the provider block.
+
+SCENARIO
+  The AWS version of this lab created one bucket per data zone. Azure
+  restructures that, and the restructuring is itself the lesson.
+
+  On AWS, three zones meant three buckets, because S3 has no grouping
+  layer above a bucket. On Azure, three zones means one storage account
+  with three containers inside it, because Azure does have that layer.
+
+  So the thing that repeats is different, even though the Terraform
+  construct is identical.
+
+YOUR TASK
+  1. Declare project_name, location, and:
+
+         zones   list(string), default ["raw", "staging", "curated"]
+
+  2. Create, once:
+
+         a resource group
+         a storage account inside it
+
+  3. Then, using count:
+
+         one azurerm_storage_container per zone, named after the zone
+         one azurerm_log_analytics_workspace per zone
+
+  4. Create three outputs:
+
+         container_names    every container name, as a list, using the
+                            splat operator
+         first_container    just the first one
+         container_count    how many were created
+
+  5. Plan and confirm the count.
+
+  6. Append a fourth zone and plan again:
+
+         terraform plan -var='zones=["raw","staging","curated","archive"]'
+
+     Note how many resources are added, and that nothing is destroyed.
+
+  7. Now remove the MIDDLE zone:
+
+         terraform plan -var='zones=["raw","curated"]'
+
+     IMPORTANT: on the AWS track you had real state, so this plan showed
+     the damage directly. Here you are plan-only against an empty state,
+     so every plan reads as "N to add" and the destruction is invisible.
+
+     Go back to your AWS lab 08 notes and re-read the plan you got there.
+     That is what this configuration would do. The Azure track cannot
+     show it to you, and pretending otherwise would be dishonest.
+
+  8. Write down, from the AWS result, why removing a middle element is
+     destructive under count.
+
+CONSTRAINTS
+  - Use count. No for_each anywhere; lab 09 is the same problem solved
+    the other way.
+  - Do not hardcode the number of zones.
+  - container_names must use the splat operator.
+  - Do not apply.
+
+SUCCESS CRITERIA
+  - terraform plan reports:
+        Plan: 8 to add, 0 to change, 0 to destroy.
+
+    One resource group, one storage account, three containers, three
+    workspaces. If you get 6, you forgot the Azure scaffolding; if you
+    get 10, something is repeating that should not.
+
+  - Appending a fourth zone takes it to 10 to add.
+
+  - You can explain, from the AWS lab's evidence, why count is fragile
+    when elements are removed from the middle.
+
+HINTS
+  1. Read "The count Meta-Argument" and "Splat Expressions". Both are
+     provider-agnostic, so your AWS notes apply unchanged.
+
+  2. count takes a number; count.index is the current iteration from 0.
+     Index into the list with it.
+
+     The splat operator is a star used in place of an index.
+
+  3. Shape:
+
+         resource "azurerm_storage_container" "zone" {
+           count = length(var.zones)
+
+           name               = var.zones[count.index]
+           storage_account_id = azurerm_storage_account.main.id
+         }
+
+         output "container_names" {
+           value = azurerm_storage_container.zone[*].name
+         }
+
+     What the AWS lab proved: count identifies instances by POSITION.
+     State holds zone[0]=raw, zone[1]=staging, zone[2]=curated. Removing
+     "staging" shifts everything after it down, so zone[1] must be
+     renamed from staging to curated. A name is an identity, so that
+     means destroy and recreate, and zone[2] is destroyed outright.
+
+     One zone removed, four resources destroyed, two recreated, including
+     one you never touched.
+
+     Note that container names are easier to change than storage account
+     names, so the Azure blast radius here is smaller than AWS's. The
+     principle is identical; the consequence is milder because the
+     repeating unit is cheaper. Do not let that lull you: apply the same
+     configuration to storage accounts rather than containers and it is
+     exactly as bad.

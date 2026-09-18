@@ -1,0 +1,104 @@
+LAB 09: for_each over a set
+Track: Azure (PLAN ONLY)
+Tier: 2
+Estimated time: 30 minutes
+Exam objectives: 8g, 8e, 6d
+Pairs with: AWS lab 09
+
+Do lab 08 first, on both tracks.
+
+SCENARIO
+  Lab 08 ended with a configuration that is fragile when an element is
+  removed from the middle of the list, because count identifies instances
+  by position and positions shift.
+
+  for_each identifies them by key instead. Keys do not shift.
+
+  This lab rebuilds the same infrastructure the other way. The Terraform
+  is identical to the AWS version; only the resource types differ. That
+  is the point worth noticing.
+
+YOUR TASK
+  1. Same variables as lab 08. Leave zones as a list(string); converting
+     it is part of the exercise.
+
+  2. Same resource group and storage account.
+
+  3. Create the containers and workspaces with for_each.
+
+  4. Before getting it working, do this deliberately. Write:
+
+         for_each = var.zones
+
+     and run terraform validate. Read the error in full. It states
+     exactly what for_each accepts and exactly what you gave it.
+
+  5. Fix it with the appropriate conversion function.
+
+  6. Create three outputs:
+
+         container_names     a map of zone to container name
+         curated_container   the curated one, addressed BY KEY
+         instance_keys       the keys Terraform used, sorted
+
+  7. Plan and confirm the count matches lab 08.
+
+  8. Compare your outputs against lab 08's. The infrastructure is the
+     same; the way you address it is not. Write down which output shape
+     you would rather hand to another team.
+
+  9. As in lab 08, the destructive comparison needs real state, so refer
+     back to your AWS lab 09 result for what removing a middle zone does
+     here.
+
+CONSTRAINTS
+  - zones must stay a list(string). Convert at the point of use.
+  - No count anywhere.
+  - curated_container must be addressed by key, not position.
+  - Do not apply.
+
+SUCCESS CRITERIA
+  - The deliberate failure in step 4 names both what for_each requires
+    and what type you supplied.
+
+  - terraform plan reports:
+        Plan: 8 to add, 0 to change, 0 to destroy.
+
+    The same total as lab 08, from a configuration that behaves very
+    differently under change.
+
+  - instance_keys is ["curated", "raw", "staging"].
+
+  - You can state the one case where count is still the better choice.
+
+HINTS
+  1. "The for_each Meta-Argument", plus the type conversion functions.
+     Identical to the AWS lab; nothing here is Azure-specific.
+
+  2. for_each accepts a map or a set of strings, never a list. toset()
+     converts, discarding order and duplicates.
+
+     With a set, each.key and each.value are the same value, because a
+     set has no separate keys so Terraform uses the element itself.
+
+  3. Shape:
+
+         resource "azurerm_storage_container" "zone" {
+           for_each = toset(var.zones)
+
+           name               = each.key
+           storage_account_id = azurerm_storage_account.main.id
+         }
+
+         output "container_names" {
+           value = { for k, c in azurerm_storage_container.zone : k => c.name }
+         }
+
+     On when count still wins: a resource that exists zero or one times,
+     written as count = var.enabled ? 1 : 0. That is lab 16, and it is by
+     far the most common legitimate use of count.
+
+     On step 8: the map output is self-describing. A caller reading
+     {"curated" = "curated"} knows what they have; a caller reading
+     ["curated", "raw", "staging"] has to know the ordering convention.
+     For anything crossing a team boundary, that difference decides it.

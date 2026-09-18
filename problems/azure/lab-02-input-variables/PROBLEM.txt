@@ -1,0 +1,90 @@
+LAB 02: Input variables with types and defaults
+Track: Azure (PLAN ONLY)
+Tier: 1
+Estimated time: 25 minutes
+Exam objectives: 8a, 8b, 6b
+Pairs with: AWS lab 02
+
+Never run terraform apply on the Azure track.
+
+SCENARIO
+  Lab 01 hardcoded every value. This lab parameterises the same
+  infrastructure, and in doing so hits a naming problem the AWS track
+  never produces.
+
+YOUR TASK
+  1. Create a working directory. Declare five variables:
+
+         project_name       string, default "coolngl"
+         location           string, default "uksouth"
+         retention_days     number, default 30
+         enable_versioning  bool,   default true
+         tags               map(string), with two default entries
+
+  2. Build a resource group, a storage account and a Log Analytics
+     workspace, all named from project_name.
+
+  3. Enable blob versioning on the storage account from the bool
+     variable. Note where that setting lives: Azure puts it in a nested
+     block on the account itself, where AWS needed a separate
+     aws_s3_bucket_versioning resource.
+
+  4. Apply the tags map to all three resources.
+
+  5. Create terraform.tfvars setting retention_days to 90.
+
+  6. Plan, and confirm retention is 90 rather than the default 30.
+
+  7. Now the Azure-specific part. Try naming the storage account with the
+     same pattern the AWS track used for buckets:
+
+         name = "${var.project_name}-uploads"
+
+     Plan it. Read the error, and work out what you must do instead.
+
+  8. Confirm variable precedence behaves as it did on AWS:
+
+         terraform plan -var="retention_days=7"
+
+CONSTRAINTS
+  - Every variable needs a type and a description.
+  - Do not apply.
+  - The storage account name must be built from project_name, not
+    hardcoded.
+
+SUCCESS CRITERIA
+  - terraform plan reports:
+        Plan: 3 to add, 0 to change, 0 to destroy.
+
+  - retention_days resolves to 90 from tfvars, and 7 when -var is used.
+
+  - Step 7's hyphenated name is rejected, and you can explain why the
+    identical pattern was fine for an S3 bucket.
+
+HINTS
+  1. Read the azurerm_storage_account page, particularly blob_properties,
+     and azurerm_log_analytics_workspace for sku and retention_in_days.
+
+  2. Blob versioning is blob_properties with versioning_enabled inside.
+
+     For the name, remember lab 01's rule: lowercase letters and digits
+     only. A hyphen is legal in a bucket name and illegal here, so the
+     separator has to go entirely.
+
+  3. Shape:
+
+         name = "st${var.project_name}uploads"
+
+         blob_properties {
+           versioning_enabled = var.enable_versioning
+         }
+
+     This asymmetry recurs throughout the track. Azure naming rules are
+     per resource type: resource groups allow hyphens, storage accounts
+     do not, containers do. No single convention satisfies all three,
+     which is why lab 05 pushes the reconciliation into locals.
+
+     Also worth noticing: versioning being a nested block rather than a
+     separate resource means Azure has one fewer resource to manage, and
+     also one fewer thing you can import independently. That trade-off
+     surfaces properly in the Tier 4 AWS labs.
