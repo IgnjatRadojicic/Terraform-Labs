@@ -1,0 +1,137 @@
+LAB 09: for_each over a set
+Track: AWS (LocalStack)
+Tier: 2
+Estimated time: 35 minutes
+Exam objectives: 8g, 8e, 6d, 6e
+
+Do Lab 08 first. This lab is the same problem solved differently, and the
+comparison is the entire point. Reading this one first wastes both.
+
+SCENARIO
+  Lab 08 ended with a plan that destroyed four resources because you
+  removed one zone from the middle of a list. Nothing was wrong with your
+  configuration. The problem was that count identifies instances by
+  position, and positions shift.
+
+  for_each identifies instances by key instead. Keys do not shift.
+
+  This lab rebuilds exactly the same infrastructure, then repeats exactly
+  the same edit, so you can see the difference rather than take it on
+  trust.
+
+YOUR TASK
+  1. Create a new working directory from scratch. Do not reuse the Lab 08
+     directory, because you will want to compare them.
+
+  2. Declare the same two variables as Lab 08:
+
+         project_name   string, default "lakehouse"
+         zones          list(string), default ["raw","staging","curated"]
+
+     Leave zones as a list. Do not change its type. Converting it is part
+     of the lab.
+
+  3. Build the same infrastructure as Lab 08, one bucket and one log
+     group per zone, but using for_each instead of count.
+
+  4. Before you get it working, do this deliberately. Write:
+
+         for_each = var.zones
+
+     and run terraform validate. Read the error in full. It tells you
+     exactly what for_each accepts and exactly what you gave it.
+
+     This is one of the most common errors in real Terraform, and seeing
+     it once on purpose is cheaper than meeting it under deadline.
+
+  5. Fix it with the appropriate conversion function.
+
+  6. Create three outputs:
+
+         bucket_names    a map of zone name to bucket name
+         curated_bucket  the curated bucket, addressed by key
+         instance_keys   the keys Terraform used, sorted
+
+  7. Apply. Compare terraform state list against Lab 08's. The addresses
+     are the whole difference.
+
+  8. Now repeat the Lab 08 experiment:
+
+         terraform plan -var='zones=["raw","curated"]'
+
+     Compare the numbers directly against what Lab 08 produced for the
+     identical edit.
+
+  9. Also try reordering without removing anything:
+
+         terraform plan -var='zones=["curated","raw","staging"]'
+
+     Then consider what Lab 08 would have done with the same reordering.
+
+  10. Destroy.
+
+CONSTRAINTS
+  - zones must stay a list(string). Convert at the point of use, not by
+    changing the variable's type. Real modules often receive a list
+    because a list is pleasanter to write, and converting inside is the
+    normal pattern.
+
+  - Do not use count anywhere.
+
+  - curated_bucket must be addressed by key, not by position.
+
+SUCCESS CRITERIA
+  - The deliberate failure in step 4 produces an error naming both what
+    for_each requires and what type you supplied.
+
+  - terraform apply reports:
+        Apply complete! Resources: 6 added, 0 changed, 0 destroyed.
+
+  - terraform state list shows addresses of the form
+        aws_s3_bucket.zone["raw"]
+
+  - Removing the middle zone produces a plan that destroys exactly TWO
+    resources and adds ZERO. Lab 08's identical edit destroyed four and
+    added two.
+
+  - Reordering the list produces no changes at all.
+
+  - You can state the one situation in which count is still the better
+    choice.
+
+HINTS
+  1. The documentation page is "The for_each Meta-Argument". Read the
+     section on what types it accepts, and the one describing each.key
+     and each.value. For the conversion, look through the type conversion
+     functions.
+
+  2. for_each accepts a map or a set of strings, never a list. toset()
+     performs that conversion.
+
+     With a set, each.key and each.value are the same thing, which
+     surprises people. That is because a set has no keys of its own, so
+     Terraform uses the element itself as the key. With a map they
+     genuinely differ, which is Lab 10.
+
+     Note what toset() also does: it discards order and removes
+     duplicates. Both are fine here and both are the reason for_each is
+     immune to the Lab 08 problem.
+
+  3. Shape:
+
+         resource "aws_s3_bucket" "zone" {
+           for_each = toset(var.zones)
+           bucket   = "${var.project_name}-${each.key}"
+         }
+
+         output "bucket_names" {
+           value = { for k, b in aws_s3_bucket.zone : k => b.bucket }
+         }
+
+     On when count still wins: use count when you need N identical copies
+     and there is no meaningful key to identify them by, for example
+     three subnets across three availability zones where the AZ list is
+     genuinely positional, or a resource that exists zero or one times
+     based on a boolean. That second case, count = var.enabled ? 1 : 0,
+     is by far the most common legitimate use of count and appears in
+     Lab 16.
