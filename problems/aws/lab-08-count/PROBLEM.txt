@@ -1,0 +1,139 @@
+LAB 08: count for near-identical resources
+Track: AWS (LocalStack)
+Tier: 2
+Estimated time: 35 minutes
+Exam objectives: 8g, 8e, 6d, 6e
+
+From Tier 2 onward there are no starter files. Create the directory and
+every file yourself. You have written a provider block three times now,
+and writing it a fourth without copying is part of the exercise.
+
+SCENARIO
+  Your data platform needs one bucket per data zone: raw, staging and
+  curated. Each bucket is identical apart from its name, and each needs a
+  matching CloudWatch log group.
+
+  Writing six near-identical resource blocks works and is what most
+  people do first. It also means that adding a fourth zone is a
+  copy-paste job, and copy-paste is how two of the six drift apart.
+
+  count is the first tool Terraform gives you for this. It is also the
+  one that will eventually hurt you, and this lab is designed so that it
+  does, while nothing is at stake.
+
+YOUR TASK
+  1. Create a new working directory with versions.tf, providers.tf,
+     variables.tf, main.tf and outputs.tf.
+
+     The provider must point at LocalStack. You need the s3 and logs
+     endpoints for this lab.
+
+  2. Declare two variables:
+
+         project_name   string, default "lakehouse"
+         zones          list(string), default ["raw","staging","curated"]
+
+  3. Using count, create:
+
+         one aws_s3_bucket per zone, named
+             <project_name>-<zone>
+
+         one aws_cloudwatch_log_group per zone, named
+             /aws/<project_name>/<zone>
+         with retention_in_days 7
+
+  4. Create three outputs:
+
+         bucket_names   every bucket name, as a list
+         first_bucket   just the first bucket's name
+         bucket_count   how many were created
+
+     For the first one, find the operator that pulls a single attribute
+     from every instance at once. Writing it as a for expression also
+     works, but the operator is what the exam asks about.
+
+  5. Apply. Confirm 6 resources and look at how the addresses are
+     written in terraform state list.
+
+  6. Now the important part. Add a fourth zone to the END of the list:
+
+         terraform plan -var='zones=["raw","staging","curated","archive"]'
+
+     Note how many resources change. This is the case count handles well.
+
+  7. Now remove a zone from the MIDDLE of the list:
+
+         terraform plan -var='zones=["raw","curated"]'
+
+     Read this plan extremely carefully. Count the destroys. Compare that
+     number against how many zones you actually removed.
+
+     Write down what happened and why before reading the hints.
+
+  8. Destroy.
+
+CONSTRAINTS
+  - Use count. Do not use for_each anywhere in this lab, even though you
+    may already suspect it is the better tool. Lab 09 is the same problem
+    solved the other way, and the comparison only works if you feel this
+    version's failure first.
+
+  - Do not hardcode the number of zones. It must come from the length of
+    the list.
+
+  - bucket_names must use the splat operator.
+
+SUCCESS CRITERIA
+  - terraform apply reports:
+        Apply complete! Resources: 6 added, 0 changed, 0 destroyed.
+
+  - terraform state list shows addresses of the form
+        aws_s3_bucket.zone[0]
+
+  - Appending a fourth zone produces a plan adding 2 and destroying 0.
+
+  - Removing the middle zone produces a plan that destroys FOUR resources
+    and adds TWO, despite only one zone being removed.
+
+  - You can explain, in terms of how count addresses its instances,
+    exactly why that happened.
+
+HINTS
+  1. The documentation pages are "The count Meta-Argument" and, for the
+     output, "Splat Expressions" in the Terraform language docs. Read
+     what the count page says about when count is appropriate. It is
+     unusually direct about its own limitation.
+
+  2. count takes a number, and count.index gives the current iteration
+     starting at 0. Use it to index into your list.
+
+     For the fourth output, the splat operator is a star used in place of
+     an index, and it produces a list of that attribute from every
+     instance.
+
+     For step 7: ask yourself what Terraform stores as the identity of
+     each instance. It is not the zone name.
+
+  3. Shape:
+
+         resource "aws_s3_bucket" "zone" {
+           count  = length(var.zones)
+           bucket = "${var.project_name}-${var.zones[count.index]}"
+         }
+
+         output "bucket_names" {
+           value = aws_s3_bucket.zone[*].bucket
+         }
+
+     Why step 7 hurts: count identifies instances by POSITION, so state
+     holds zone[0]=raw, zone[1]=staging, zone[2]=curated. Removing
+     "staging" from the middle shifts everything after it down by one.
+     Terraform now compares zone[1], which was staging, against curated,
+     and sees a bucket whose name must change. A bucket name cannot be
+     changed in place, so it must be destroyed and recreated. zone[2] no
+     longer exists at all, so it is destroyed.
+
+     One removed zone, four resources destroyed, two recreated, and a
+     bucket that had nothing to do with your change was deleted and
+     rebuilt under the same name. On real infrastructure holding data,
+     that is an outage.
