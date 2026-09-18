@@ -1,0 +1,130 @@
+LAB 10: for_each over a map with varying configuration
+Track: AWS (LocalStack)
+Tier: 2
+Estimated time: 40 minutes
+Exam objectives: 8g, 8e, 8c, 6d
+
+SCENARIO
+  Lab 09 created three buckets that differed only by name. Real
+  infrastructure is rarely that uniform. One bucket keeps data for a
+  week, another for a year, and only some need versioning.
+
+  A set cannot express that, because a set element is only a name. A map
+  can: the key identifies the instance and the value carries whatever
+  configuration that instance needs.
+
+  This lab also introduces the pattern you will use constantly from here
+  on, creating a resource for only SOME entries by filtering the map.
+
+YOUR TASK
+  1. Create a new working directory from scratch.
+
+  2. Declare:
+
+         project_name   string, default "platform"
+
+         buckets        map(object({
+                          retention_days = number
+                          versioned      = bool
+                        }))
+
+     with this default:
+
+         uploads   retention 7,   versioned true
+         reports   retention 90,  versioned false
+         archive   retention 365, versioned true
+
+  3. Create, for every entry:
+
+         aws_s3_bucket           named <project_name>-<key>
+         aws_cloudwatch_log_group named /aws/<project_name>/<key>
+                                 with that entry's retention_days
+
+  4. Create aws_s3_bucket_versioning for ONLY the entries where
+     versioned is true.
+
+     Do this by filtering the map, not by creating the resource for
+     everything with a disabled status. Those two are not equivalent and
+     the solution explains why.
+
+  5. Create three outputs:
+
+         bucket_names         map of key to real bucket name
+         versioned_buckets    sorted list of keys that got a versioning
+                              resource
+         retention_by_bucket  map of key to the retention that was
+                              actually applied
+
+  6. Apply. Confirm the counts, then confirm in state that the versioning
+     resource exists for exactly two of the three.
+
+  7. Add a fourth bucket by passing a new map on the command line, or by
+     editing the default. Confirm nothing existing is touched.
+
+  8. Change ONLY the retention of one bucket. Confirm the plan changes
+     exactly one resource.
+
+  9. Destroy.
+
+CONSTRAINTS
+  - for_each only. No count anywhere.
+
+  - The versioning resource must exist only for entries that asked for
+    it. If terraform state list shows three versioning resources, the
+    filter is wrong.
+
+  - Do not repeat the bucket name string when wiring the versioning
+    resource to its bucket. Reference the bucket resource by key.
+
+SUCCESS CRITERIA
+  - terraform apply reports:
+        Apply complete! Resources: 8 added, 0 changed, 0 destroyed.
+
+    Three buckets, three log groups, two versioning resources. If you get
+    9, your filter is not filtering.
+
+  - versioned_buckets is ["archive", "uploads"].
+
+  - retention_by_bucket shows three different values, proving each
+    instance received its own configuration.
+
+  - Adding a fourth entry produces a plan that only adds.
+
+  - Changing one entry's retention produces a plan with exactly
+    1 to change.
+
+HINTS
+  1. The documentation you need is "The for_each Meta-Argument" again,
+     plus "For Expressions" for the filter. You do not need a new
+     meta-argument for step 4, only a different expression in the
+     for_each you already know.
+
+  2. With a map, each.key is the map key and each.value is the object
+     behind it. So each.value.retention_days reaches a field.
+
+     For the filter, a for expression can produce a map and can carry an
+     if clause. The result is still a map, so it is still a valid
+     for_each argument.
+
+     For wiring the versioning resource to its bucket, remember that a
+     for_each resource is itself a map, so you can index it by the same
+     key.
+
+  3. Shapes:
+
+         resource "aws_cloudwatch_log_group" "this" {
+           for_each          = var.buckets
+           retention_in_days = each.value.retention_days
+         }
+
+         resource "aws_s3_bucket_versioning" "this" {
+           for_each = { for k, v in var.buckets : k => v if v.versioned }
+           bucket   = aws_s3_bucket.this[each.key].id
+         }
+
+     Why filtering beats a disabled status: a versioning resource with
+     status "Suspended" is a real resource that exists in state and had
+     to be created. Filtering means it was never created at all. The
+     difference shows up when you flip a bucket from versioned to not,
+     since one path destroys a resource and the other modifies it, and
+     only one of those is what you meant.
